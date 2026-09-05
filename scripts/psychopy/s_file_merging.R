@@ -558,11 +558,15 @@ cat("Outputs written to: ", output_dir, "\n", sep = "")
 
 #==== saving to processed data ====#
 #manual inspection deemed file as good, so we now save it to processed files#
+source_file <- "data/inter/psychopy/psychopy_master.csv"
 processed_dir <- "data/processed/psychopy/master"
+destination_file <- file.path(processed_dir, "psychopy_master.csv")
 
+stopifnot(file.exists(source_file))
 dir.create(processed_dir, recursive = TRUE, showWarnings = FALSE)
 
-write_csv(
-  master,
-  file.path(processed_dir, "psychopy_master.csv")
-)
+if (file.exists(destination_file)) {
+  stop("Processed master already exists; it was not overwritten.")
+}
+
+file.copy(source_file, destination_file)
