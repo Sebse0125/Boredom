@@ -1,0 +1,147 @@
+PsychoPy movement extraction and merging workflow -> Step 2
+
+Purpose
+
+Create an auditable participant-level movement master from standardized PsychoPy
+files without modifying source data.
+
+Script
+
+`scripts/psychopy/s_file_merging.R`
+
+Input
+
+`data/s_files/psychopy/ID_Block_Condition.csv`
+
+- ID format: two letters, two digits, two letters, two digits.
+- Block: A or B; A was measured first and B second.
+- Condition: HB or LB.
+- Each ID should have exactly two files: one HB, one LB, one A, and one B.
+- The standardized filename is authoritative for ID, Block, and Condition.
+
+Outputs
+
+All outputs are written to `data/inter/psychopy`:
+
+- `file_validation.csv`: filename, participant-pair, and file-level validation.
+- `psychopy_movement_audit.csv`: one row per file and trial, including raw
+  lists, raw/adjusted counts, artifact decisions, unmatched timestamps, and
+  warnings/errors.
+- `psychopy_measurement_summary.csv`: one row per measurement file; normally
+  two rows per participant.
+- `psychopy_master.csv`: one row per participant with HB/LB trial counts,
+  condition totals, and `trial_order`.
+
+The master is created only when no critical validation error remains. It stays
+in the intermediate folder until reviewed; approved data can later be moved to
+`data/processed/psychopy/master`.
+
+Procedure
+
+1. Discover all CSV files directly inside `data/s_files/psychopy`.
+2. Parse ID, Block, and Condition from each standardized filename.
+3. Validate filenames and check for duplicate ID-Block-Condition files.
+4. Confirm each ID has exactly one A, one B, one HB, and one LB file.
+5. For trials 01-04, locate the populated columns matching:
+   `Klicks_Block_[A/B]_[trial].clicked_name` and `.time`.
+6. Accept either A or B inside the raw column name. Compare it with the
+   authoritative filename Block and report disagreements as warnings.
+7. Parse list contents without evaluating code. Standardize movement names to
+   arm, head, leg, and other. Unknown names or unreadable/missing trial data
+   become NA and block creation of the final master.
+8. Apply the early-event rule below.
+9. Count adjusted arm, head, leg, other, and total movements for every trial.
+10. Create the measurement summary, then reshape HB and LB into one participant
+    row.
+11. Derive `trial_order`: `HB_LB` means HB was Block A; `LB_HB` means LB was
+    Block A.
+12. Add arm, head, leg, other, and all-movement totals across trials 01-04 for
+    HB and LB separately.
+
+Early-event rule
+
+The threshold is strictly below 0.01 seconds.
+
+- If the first timestamp is not below 0.01 seconds, remove nothing.
+- If the first timestamp is below 0.01 seconds, remove that timestamp.
+- Also remove the first clicked name only when the raw timestamp count equals
+  the raw clicked-name count. In that case, the first entries are treated as a
+  paired system artifact.
+- When timestamps outnumber clicked names, retain every clicked name because
+  the CSV cannot identify which timestamps were unnamed.
+- Record remaining unmatched timestamps; do not assign them to movement names.
+- Final summary/master files contain adjusted counts only. Raw and adjusted
+  values remain available in the movement audit.
+- A valid empty clicked-name list means zero movements. Missing, invalid, or
+  unreadable data means NA, never zero.
+
+Validation and review
+
+`REVIEW_REQUIRED`
+
+- Critical problem: invalid filename, duplicate measurement, incomplete
+  participant design, or failed trial extraction.
+- Validation and audit files are still written.
+- `psychopy_master.csv` is not created until the problem is resolved.
+
+`VALID_WITH_WARNING`
+
+- Counts remain usable, but a documented issue exists, such as unmatched
+  timestamps or an internal A/B header that differs from the filename.
+- The file remains in summaries and the master.
+
+`VALID`
+
+- No critical issue or warning was found.
+
+Expected documented warnings
+
+The following warnings were identified while inspecting the retained raw data.
+Standardized filenames are shown.
+
+- `AN15AV09_A_LB.csv`, trial 02: one timestamp remains unmatched after removing
+  the early timestamp. Retain all clicked names; do not assign the timestamp.
+- `CH10AL22_B_HB.csv`, trial 01: one timestamp remains unmatched after removing
+  the early timestamp. Retain all clicked names; do not assign the timestamp.
+- `JE06AD10_A_LB.csv`, trial 03: one timestamp remains unmatched after removing
+  the early timestamp. Retain all clicked names; do not assign the timestamp.
+- `MA25UT20_B_LB.csv`, trial 03: one timestamp remains unmatched after removing
+  the early timestamp. Retain all clicked names; do not assign the timestamp.
+- `SA09OR12_A_LB.csv`, trial 03: three timestamps remain unmatched after
+  removing the early timestamp. Retain all clicked names; do not assign the
+  timestamps.
+- `LE11ON12_B_LB.csv`, trials 01-04: internal columns contain Block A because of
+  the previously documented system error. Use Block B from the standardized
+  filename; retain and count the populated trial columns.
+
+These warnings document uncertainty but do not justify deleting named movement
+events. Confirm the exact warnings against the newly generated audit after each
+run because the input folder may change.
+
+Manual warning-resolution log
+
+Copy one block per new or changed warning:
+
+
+- File: ______________________________________________
+  Trial: __________
+  Audit warning: _____________________________________
+  Evidence reviewed: _________________________________
+  Decision: __________________________________________
+  Data change made: __________________________________
+  Reviewer/date: _____________________________________
+
+  -> no manual warning resolutions necessary
+
+Final approval
+
+- [ ] `file_validation.csv` contains no `REVIEW_REQUIRED` rows.
+- [ ] Every warning in `psychopy_movement_audit.csv` has been reviewed or
+      accepted under the documented rule.
+- [ ] Each ID has one HB and one LB measurement.
+- [ ] Each ID has a valid `HB_LB` or `LB_HB` trial order.
+- [ ] Trial totals equal arm + head + leg + other.
+- [ ] HB/LB condition totals equal the sums of trials 01-04.
+- [ ] Participant count and IDs match the expected study sample.
+- [ ] Only after these checks, move the approved master to
+      `data/processed/psychopy/master`.

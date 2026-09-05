@@ -1,0 +1,30 @@
+PsychoPy pre-management workflow -> Step 1
+
+1. Read CSVs from `data/s_files/psychopy_working_files`; never edit raw files.
+2. Extract ID with the strict two-letter/two-digit repeated pattern.
+3. Extract Condition (`HB`/`LB`) from: Condition, participant, session, filename.
+4. Extract Block (`A`/`B`) from `expName`, except documented overrides.
+5. Apply decisions, exclude incomplete runs, and validate exactly two files per ID:
+   one A, one B, one HB, and one LB.
+6. Copy approved files to `data/s_files/psychopy` as `ID_Block_Condition.csv`.
+7. Save extraction, decisions, and completeness audits under
+   `data/s_files/psychopy_metadata_audit`.
+
+Documented decisions
+
+- `LE11ON12_B_LB__Balance_and_VR_A_2024-06-24_09h45.48.708.csv`:
+  treat as Block B; `expName` A resulted from a system error.
+- `CH101AN25_A_HB__Balance_and_VR_A_2024-07-01_11h46.18.751.csv`:
+  correct ID to `CH10AN25`.
+- `JU20ÜC09_A_LB_Balance_and_VR_A_2024-07-08_16h25.25.936.csv`:
+  use ID `JU20ÜC09`; participant field is wrong.
+- `CA11UE11_B_LB_Balance_and_VR_B_2024-06-26_15h40.43.273.csv`:
+  correct ID to `CA11UR11`.
+- Exclude incomplete `AN06AN18_A_LB...10h28.55.133.csv`; retain 11h01 run.
+- Exclude incomplete `CA04TU11...B...09h03.49.193.csv`; retain 09h13 run.
+- CH10AN25_B_LB__Balance_and_VR_B_2024-07-01_12h51.08.713.csv:
+  treat as Block B; participant metadata incorrectly indicates Block A.
+
+Raw metadata errors remain unchanged and are documented in the audit. Later data
+extraction should assign canonical ID, Block, and Condition from the standardized
+filename or audit manifest, not from inconsistent raw metadata fields.
