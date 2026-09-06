@@ -35,6 +35,9 @@ audit_path <- file.path(output_dir, "limesurvey_participant_audit.csv")
 cleaned_path <- file.path(output_dir, "limesurvey_cleaned.csv")
 rating_audit_path <- file.path(output_dir, "limesurvey_rating_audit.csv")
 missingness_path <- file.path(output_dir, "limesurvey_rating_missingness.csv")
+final_validation_path <- file.path(output_dir, "limesurvey_final_validation.csv")
+processed_dir <- "data/processed/limesurvey/master"
+processed_master_path <- file.path(processed_dir, "limesurvey_master.csv")
 
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
@@ -466,11 +469,108 @@ rating_missingness <- rating_long %>%
 
 write_csv(rating_missingness, missingness_path, na = "")
 
+# Final LimeSurvey-only validation. Expected, documented missing ratings are
+# accepted; any additional missing rating blocks review and processed output.
+rating_validation <- rating_long %>%
+  filter(inclusion_status == "INCLUDED") %>%
+  mutate(
+    expected_missing = case_when(
+      ID == "BG22OE24" & condition == "HB" & timepoint == "04" ~ TRUE,
+      ID == "KA14RE15" & condition == "LB" ~ TRUE,
+      ID == "DO13UE03" & condition == "HB" ~ TRUE,
+      TRUE ~ FALSE
+    )
+  ) %>%
+  group_by(ID) %>%
+  summarise(
+    rating_cells = n(),
+    missing_ratings = sum(is.na(rating)),
+    expected_missing_ratings = sum(is.na(rating) & expected_missing),
+    unexpected_missing_ratings = sum(is.na(rating) & !expected_missing),
+    documented_missing_not_present = sum(!is.na(rating) & expected_missing),
+    invalid_cleaned_rating = any(!is.na(rating) & (rating < 0 | rating > 10)),
+    .groups = "drop"
+  )
+
+survey_id_counts <- cleaned %>% count(ID, name = "survey_rows")
+
+final_validation <- psychopy_reference %>%
+  rename(reference_trial_order = psychopy_trial_order) %>%
+  left_join(cleaned, by = "ID") %>%
+  left_join(survey_id_counts, by = "ID") %>%
+  left_join(rating_validation, by = "ID") %>%
+  mutate(
+    survey_present = !is.na(survey_year),
+    survey_rows = coalesce(survey_rows, 0L),
+    ID_valid = str_detect(
+      ID,
+      "^[[:alpha:]]{2}[0-9]{2}[[:alpha:]]{2}[0-9]{2}$"
+    ),
+    trial_order_valid = trial_order %in% c("HB_LB", "LB_HB"),
+    order_matches_psychopy = !is.na(trial_order) &
+      trial_order == reference_trial_order,
+    rating_structure_valid = coalesce(rating_cells == 30L, FALSE),
+    unexpected_missing_ratings = coalesce(unexpected_missing_ratings, 30L),
+    invalid_cleaned_rating = coalesce(invalid_cleaned_rating, TRUE),
+
+    # Broad plausibility flags prompt review but do not alter measurements.
+    age_plausible = !is.na(age) & age >= 0 & age <= 120,
+    weight_plausible = !is.na(weight_kg) & weight_kg >= 20 & weight_kg <= 300,
+    height_plausible = !is.na(height_cm) & height_cm >= 100 & height_cm <= 250,
+    gender_recorded = !is.na(gender),
+    demographic_review =
+      !age_plausible | !weight_plausible | !height_plausible | !gender_recorded,
+
+    critical_problem =
+      !survey_present |
+      survey_rows != 1L |
+      !ID_valid |
+      !trial_order_valid |
+      !order_matches_psychopy |
+      !rating_structure_valid |
+      unexpected_missing_ratings > 0L |
+      invalid_cleaned_rating,
+    validation_status = case_when(
+      critical_problem ~ "REVIEW_REQUIRED",
+      demographic_review | coalesce(documented_missing_not_present, 0L) > 0L ~
+        "VALID_WITH_WARNING",
+      coalesce(missing_ratings, 0L) > 0L ~ "VALID_DOCUMENTED_MISSING",
+      TRUE ~ "VALID"
+    )
+  ) %>%
+  select(
+    ID, validation_status, survey_present, survey_rows,
+    ID_valid, trial_order, reference_trial_order,
+    trial_order_valid, order_matches_psychopy,
+    rating_cells, rating_structure_valid,
+    missing_ratings, expected_missing_ratings,
+    unexpected_missing_ratings, documented_missing_not_present,
+    invalid_cleaned_rating,
+    age, age_plausible, gender, gender_recorded,
+    weight_kg, weight_plausible, height_cm, height_plausible,
+    demographic_review
+  ) %>%
+  arrange(validation_status, ID)
+
+write_csv(final_validation, final_validation_path, na = "")
+
+if (any(final_validation$validation_status == "REVIEW_REQUIRED")) {
+  stop(
+    "Final LimeSurvey validation failed. Review ", final_validation_path,
+    ". The processed master was not written."
+  )
+}
+
+dir.create(processed_dir, recursive = TRUE, showWarnings = FALSE)
+write_csv(cleaned, processed_master_path, na = "")
+
 message("Checkpoint written: ", checkpoint_path)
 message("Audit written: ", audit_path)
 message("Cleaned condition-mapped ratings written: ", cleaned_path)
 message("Rating audit written: ", rating_audit_path)
 message("Rating missingness summary written: ", missingness_path)
+message("Final validation written: ", final_validation_path)
+message("Approved LimeSurvey master written: ", processed_master_path)
 message("Included participant rows: ", nrow(included))
 message("Excluded/test/pilot rows: ", sum(survey_checked$inclusion_status == "EXCLUDED"))
 message("Order conflicts retained from PsychoPy: ", sum(survey_checked$order_conflict, na.rm = TRUE))
