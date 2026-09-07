@@ -1,0 +1,169 @@
+LimeSurvey cleaning, condition mapping, and merging workflow
+
+Purpose
+
+Create an auditable LimeSurvey dataset from the deidentified 2024 and 2026
+exports, harmonize condition-specific ratings, and prepare it for merging with
+the PsychoPy participant master. Source exports remain unchanged.
+
+Script
+
+`workflows/limesurvey_processing.R`
+
+Inputs
+
+- `data/inter/limesurvey/limesurvey_2024_deidentified.csv`
+- `data/inter/limesurvey/limesurvey_2026_deidentified.csv`
+- `data/processed/psychopy/master/psychopy_master.csv`
+
+Outputs
+
+Checkpoint 1 writes to `data/inter/limesurvey`:
+
+- `limesurvey_participant_checkpoint.csv`: included participants with cleaned
+  demographics, IDs, and trial order. Trial ratings are not included yet.
+- `limesurvey_participant_audit.csv`: every source row, inclusion status, ID
+  correction, PsychoPy match, and order comparison.
+
+Later checkpoints will add:
+
+- `limesurvey_cleaned.csv`: participant metadata plus cleaned HB/LB effort,
+  boredom, and pain ratings.
+- `limesurvey_rating_audit.csv`: one row per source rating, retaining its raw
+  value, cleaned value, A/B position, mapped HB/LB condition, status, and note.
+- `limesurvey_rating_missingness.csv`: available and missing rating counts for
+  every included participant and condition.
+- `limesurvey_final_validation.csv`: participant-level structure, order,
+  rating, missingness, and demographic plausibility checks.
+- `data/processed/limesurvey/master/limesurvey_master.csv`: approved
+  LimeSurvey-only master, written only when critical validation passes.
+
+Checkpoint 1: participant metadata and inclusion
+
+1. Read both deidentified CSV exports as character data.
+2. Require the verified year-specific columns for ID, demographics, and order.
+   Stop rather than guess if a required column is absent.
+3. Convert blank strings and literal `NA` text to missing values.
+4. Standardize ID capitalization and remove separators.
+5. Apply confirmed ID corrections:
+   - `DO11ÜB30` -> `DO11UB30`
+   - `DI16ÜB31` -> `DI16UB31`
+   - incomplete ID `AN` -> `AN07IE11`
+6. Retain both the original and standardized gender values. Standardized values
+   are `male`, `female`, and `diverse`.
+7. Validate the ID pattern: two letters, two digits, two letters, two digits.
+8. Match IDs against the approved PsychoPy master. Obvious tests, pilots,
+   invalid IDs, and rows without matching PsychoPy data are excluded from the
+   checkpoint but retained in the audit with a reason.
+9. Compare LimeSurvey order with PsychoPy `trial_order`. PsychoPy is
+   authoritative when the two disagree.
+10. Stop before writing the checkpoint if an included ID occurs more than once.
+
+Confirmed participant decisions
+
+- `JU20ÜC09`: LimeSurvey says `HB_LB`, while PsychoPy says `LB_HB`. Retain
+  PsychoPy order `LB_HB` and flag the disagreement.
+- `BG22OE24`: measurement stopped because the participant became unwell.
+  Retain available data and preserve missing final ratings as NA.
+- `KA14RE15`: values of 99 mean missing because the survey site crashed.
+  Convert them to NA during rating cleaning and document the conversion.
+- `DO13UE03`: parts of the wider measurement failed. Retain available
+  LimeSurvey and PsychoPy information; preserve missing ratings as NA. Later
+  eligibility decisions occur only after all datasets are merged.
+
+Checkpoint 2: ratings
+
+`IMPLEMENTED`
+
+1. Extract effort, boredom, and pain for baseline and trials 01-04 in Blocks A
+   and B from both language-specific schemas.
+2. Convert ratings to numeric. Accept only 0-10; turn 99 and any other invalid
+   value into NA while retaining the original value in the audit.
+3. Interpret A and B as measurement positions:
+   - `LB_HB`: A = LB and B = HB.
+   - `HB_LB`: A = HB and B = LB.
+4. Reshape to intelligible condition columns such as
+   `effort_LB_baseline`, `effort_LB_01`, ..., `pain_HB_04`.
+5. Record participant-, condition-, trial-, and measure-specific missingness.
+6. Write one clean participant row containing 30 rating columns:
+   two conditions x three measures x baseline/trials 01-04.
+
+Rating validity and missingness
+
+- The valid rating range is 0-10 inclusive.
+- Blank values and literal `NA` are retained as NA.
+- Non-numeric values and numeric values outside 0-10 are converted to NA and
+  marked in `limesurvey_rating_audit.csv`.
+- A missing value is never converted to zero.
+- `KA14RE15`: all recorded values of 99 are converted to NA and annotated as
+  missing after a LimeSurvey site crash.
+- `BG22OE24`: the three missing final B-position ratings are retained as NA and
+  annotated as resulting from the participant becoming unwell.
+- `DO13UE03`: unavailable B-position ratings are retained as NA and annotated.
+
+Checkpoint 3: final LimeSurvey validation
+
+`IMPLEMENTED`
+
+1. Confirm one LimeSurvey row per included ID.
+2. Confirm every retained rating is numeric and within 0-10.
+3. Confirm each approved PsychoPy ID has one matching LimeSurvey row and the
+   same authoritative trial order.
+4. Confirm exactly 30 rating cells per participant.
+5. Accept only the documented missing-rating patterns for `BG22OE24`,
+   `KA14RE15`, and `DO13UE03`. Any additional missing rating produces
+   `REVIEW_REQUIRED`.
+6. Flag missing or broadly implausible demographics for review without
+   changing their values. Review ranges are age 0-120 years, weight 20-300 kg,
+   and height 100-250 cm.
+7. Always write the final validation report. Write the processed LimeSurvey
+   master only when no row is marked `REVIEW_REQUIRED`.
+
+Future cross-measurement merge
+
+`DEFERRED TO A SEPARATE SCRIPT/WORKFLOW`
+
+The LimeSurvey/PsychoPy merge is intentionally not performed here. It may later
+be combined with additional measurement types. Merge by standardized ID,
+retain partial component data as NA, and produce a separate merge audit.
+
+Manual warning-resolution log
+
+Copy one block for each new warning requiring judgment:
+
+- ID/file: ___________________________________________
+  Warning: ___________________________________________
+  Evidence reviewed: _________________________________
+  Decision: __________________________________________
+  Data change made: __________________________________
+  Reviewer/date: _____________________________________
+
+Checkpoint 1 review
+
+- [ ] Required columns were found in both source files.
+- [ ] All expected study IDs are included exactly once.
+- [ ] Every excluded row and its reason were reviewed in the audit.
+- [ ] Confirmed ID corrections are present.
+- [ ] `JU20ÜC09` has final `trial_order = LB_HB` and is flagged.
+- [ ] No unexpected survey/PsychoPy order conflict remains.
+- [ ] Demographic values and missingness are plausible.
+
+Checkpoint 2 review
+
+- [ ] `limesurvey_cleaned.csv` contains one row per expected participant.
+- [ ] It contains 30 condition-labelled rating columns per participant.
+- [ ] All non-missing cleaned ratings are between 0 and 10.
+- [ ] `KA14RE15` values of 99 became NA and are documented in the audit.
+- [ ] `BG22OE24` missing final ratings remain NA and are documented.
+- [ ] `DO13UE03` unavailable ratings remain NA and are documented.
+- [ ] Every row marked `REVIEW_MISSING` in the missingness file is explained.
+
+Checkpoint 3 review
+
+- [ ] `limesurvey_final_validation.csv` contains no `REVIEW_REQUIRED` rows.
+- [ ] Every expected PsychoPy participant has exactly one LimeSurvey row.
+- [ ] All final trial orders match the PsychoPy reference.
+- [ ] The only missing-rating patterns are the three documented exceptions.
+- [ ] Demographic plausibility flags have been reviewed.
+- [ ] The approved master exists at
+      `data/processed/limesurvey/master/limesurvey_master.csv`.

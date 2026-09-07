@@ -1,0 +1,135 @@
+Final source preparation and combined master workflow
+
+Purpose
+
+Create analysis-ready standalone balance, PsychoPy, and LimeSurvey files, then
+merge them into one participant-level master while retaining source-specific
+files for separate analyses.
+
+Script
+
+`workflows/master_file_preparation.R`
+
+Inputs
+
+- `data/processed/balance/merged/data_merged.csv`
+- `data/processed/psychopy/master/psychopy_master.csv`
+- `data/processed/limesurvey/master/limesurvey_master.csv`
+
+Outputs
+
+All outputs are written to `data/processed/master`:
+
+- `balance_master.csv`: full balance data with standardized ASCII IDs,
+  demographic unit suffixes, and documented height corrections.
+- `psychopy_final.csv`: full PsychoPy master with standardized ASCII IDs.
+- `limesurvey_final.csv`: LimeSurvey master without administrative/audit fields.
+- `master.csv`: balance-authoritative participant merge of all three sources.
+- `master_id_mapping_audit.csv`: original/normalized IDs, match status, and any
+  proposed fuzzy match.
+- `master_merge_audit.csv`: presence of each balance ID in all three sources.
+- `master_correction_audit.csv`: original and corrected balance values.
+
+Authority rules
+
+- Balance is authoritative for participant IDs and demographic variables.
+- PsychoPy is authoritative for `trial_order` and exact `Block`/`block` fields.
+- LimeSurvey and balance order/block fields are not added to the combined
+  master when an authoritative PsychoPy equivalent exists.
+- Standalone final files retain their own variables except for the explicitly
+  requested LimeSurvey removals.
+- Any remaining duplicate column name is retained with a source prefix instead
+  of being silently overwritten.
+
+ID standardization and matching
+
+1. Convert IDs to uppercase.
+2. Replace `Ä` with `A`, `Ö` with `O`, and `Ü` with `U`.
+3. Remove spaces, underscores, hyphens, and other non-alphanumeric separators.
+4. Use normalized balance IDs as the authoritative ID set.
+5. Accept exact matches after normalization.
+6. For a remaining ID, calculate Levenshtein distance to balance IDs. A unique
+   distance-one candidate is written as `FUZZY_REVIEW_REQUIRED`; it is not
+   merged automatically. Ambiguous and more distant IDs are also flagged.
+7. Stop before final-file creation whenever fuzzy or unmatched IDs remain.
+   Add a confirmed manual override to the script only after evidence review.
+
+Confirmed source-only exclusions
+
+The authoritative balance file contains 41 unique IDs. The following three IDs
+exist in PsychoPy and LimeSurvey but have no retained balance row:
+
+- `CH10AN25`
+- `CH18EU28`
+- `DO13UE03`
+
+They are retained in `psychopy_final.csv` and `limesurvey_final.csv`, assigned
+`CONFIRMED_SOURCE_ONLY_EXCLUDED_FROM_MASTER` in the audits, and excluded from
+the balance-authoritative `master.csv`. No fuzzy match is attempted for them.
+`CH10AL22` is a distinct participant and matches exactly across all sources; it
+must never be used as a substitute for `CH10AN25`.
+
+Balance corrections
+
+- Rename the height variable to `height_cm` and weight to `weight_kg`.
+- Set `height_cm` to NA for the following confirmed impossible entries:
+  - `KO24IE08`
+  - `MA25UT20`
+  - `AN15AV09`
+  - `KA09UH17`
+- Retain original values and the correction reason in
+  `master_correction_audit.csv`.
+- No other demographic values are changed automatically.
+
+LimeSurvey final removals
+
+The following fields are excluded from `limesurvey_final.csv`:
+
+- `response_id`
+- `gender_original`
+- `survey_trial_order`
+- `psychopy_trial_order`
+- `order_conflict`
+- `source_file`
+- `source_row`
+
+Merge procedure
+
+1. Validate one non-missing normalized ID per row and no duplicate IDs within
+   each source.
+2. Write the ID mapping audit before applying any cross-source merge.
+3. Stop for review if a PsychoPy or LimeSurvey ID lacks an exact normalized
+   balance match.
+4. Apply documented balance corrections and write the three standalone files.
+5. Remove non-authoritative demographic/order/block duplicates from the join
+   copies only; standalone files remain intact.
+6. Left-join PsychoPy and LimeSurvey onto balance by normalized ID so the
+   balance participant set controls the rows in `master.csv`.
+7. Confirm that the merge did not change the number or uniqueness of balance
+   IDs.
+8. Write a merge audit showing complete and incomplete three-source matches.
+
+Manual ID-resolution log
+
+Copy one block for each fuzzy or unmatched ID:
+
+- Source: ____________________________________________
+  Original ID: _______________________________________
+  Proposed balance ID: _______________________________
+  Evidence reviewed: _________________________________
+  Decision/manual override: __________________________
+  Reviewer/date: _____________________________________
+
+Final review
+
+- [ ] `master_id_mapping_audit.csv` contains no unresolved match.
+- [ ] The three confirmed source-only IDs are documented and absent from
+      `master.csv` but present in their standalone source files.
+- [ ] All four height corrections appear in `master_correction_audit.csv`.
+- [ ] Balance uses `height_cm` and `weight_kg`.
+- [ ] All standalone final files contain unique participant IDs.
+- [ ] `master_merge_audit.csv` contains the expected participant coverage.
+- [ ] The row count of `master.csv` equals the row count of balance master.
+- [ ] `master.csv` contains one unique row per authoritative balance ID.
+- [ ] Trial order and Block variables come from PsychoPy.
+- [ ] No source column was silently overwritten during merging.
