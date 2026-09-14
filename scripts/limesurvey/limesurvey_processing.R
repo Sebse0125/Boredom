@@ -1,4 +1,6 @@
 # Clean and harmonize LimeSurvey participant metadata (checkpoint 1).
+#this file was created with several checkpoints and audit files to ensure validity
+#"deidentified" with removed researcher names (column) were used to simplyfy file structure and ensure privacy of (former) students
 #
 # Inputs:
 #   data/inter/limesurvey/limesurvey_2024_deidentified.csv
@@ -21,6 +23,7 @@ library(stringr)
 library(tibble)
 library(tidyr)
 
+#input files and select directories
 input_dir <- "data/inter/limesurvey"
 output_dir <- "data/inter/limesurvey"
 psychopy_master_path <- "data/processed/psychopy/master/psychopy_master.csv"
@@ -30,6 +33,7 @@ survey_paths <- c(
   `2026` = file.path(input_dir, "limesurvey_2026_deidentified.csv")
 )
 
+#audit and checkpoint files
 checkpoint_path <- file.path(output_dir, "limesurvey_participant_checkpoint.csv")
 audit_path <- file.path(output_dir, "limesurvey_participant_audit.csv")
 cleaned_path <- file.path(output_dir, "limesurvey_cleaned.csv")
@@ -40,6 +44,7 @@ processed_dir <- "data/processed/limesurvey/master"
 processed_master_path <- file.path(processed_dir, "limesurvey_master.csv")
 
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+
 
 required_columns <- list(
   `2024` = c(

@@ -1,3 +1,8 @@
+### this file has the sole purpose of removing the "researcher"/"tester"-column from the 2024 and 2026 file
+## this was part of pre-processing and preperation
+# these columns were deemed completely unnecessary and in violation of privacy of former students of the university of Konstanz from the start but disruptive for file-structure and therefore deleted before any further processing
+#created files were saved with name add-on deidentified as short description that researcher/tester columns were removed
+
 library(readr)
 library(dplyr)
 library(stringr)
