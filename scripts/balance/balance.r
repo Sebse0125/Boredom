@@ -25,7 +25,7 @@ data_2026 <- data_2026 %>%
   mutate(ID = standardize_id(ID))
 
 # Save processed versions
-dir.create("data/processed", recursive = TRUE, showWarnings = FALSE)
+dir.create("data/processed/balance", recursive = TRUE, showWarnings = FALSE)
 
 write_csv(data_2024, "data/processed/balance/balance_2024.csv")
 write_csv(data_2026, "data/processed/balance/balance_2026.csv")

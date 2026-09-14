@@ -198,6 +198,7 @@ raw_metadata <- map_dfr(files, function(file) {
     )
   )
 
+# ran code, found these issues step by step and generated solutions
 # Approved manual decisions. Overrides change only the manifest and clean name;
 # they do not alter the original CSV contents.
 decisions <- tribble(
