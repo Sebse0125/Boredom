@@ -2,7 +2,7 @@
 #### here we ran checks and assumtion checks on contents of files in order to find out best workflows to standardise files and merge data into larger frame ####
 
 
-# Replace these paths with your actual folder paths
+# Folder paths
 source_folders <- c(
   "data/raw/psychopy/2024",
   "data/raw/psychopy/2026"
@@ -141,16 +141,3 @@ write_csv(
   file_summary,
   file.path(working_folder, output_name)
 )
-#----
-
-files_to_zip <- list.files(
-  "data/s_files/psychopy_working_files",
-  full.names = TRUE
-)
-
-zip(
-  zipfile = "psychopy_working_files.zip",
-  files = files_to_zip
-)
-
-file.exists("psychopy_working_files.zip")
