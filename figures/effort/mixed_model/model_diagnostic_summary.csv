@@ -1,0 +1,4 @@
+model,observations,participants,AIC,BIC,singular_fit,convergence_message
+adjusted_random_intercept,323,41,937.6305599942812,971.6294309032851,FALSE,None
+unadjusted_random_intercept,323,41,977.2066907198152,1007.4279093055965,FALSE,None
+adjusted_random_slope,323,41,913.7527663740036,955.3069419294528,FALSE,None

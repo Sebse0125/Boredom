@@ -36,6 +36,29 @@ general workflow
                 in our analysis, condition was deemed more important for sorting results than condition order or measurement block
             -
         -
-    run analysis
+    run analysis -scripts are stored under scripts/analysis -> view effort_analysis.ME for additional information
+        run demographics.csv for creating a demographic table
+            table stored as docx unter figures/demographics
+        run effort_file_prep.r -> prepares file for effort analysis
+            saves three files under analysis/files/effort -> audit file and and two data files with and without baseline effort
+        run effort_descriptives.r -> creates descriptive table for effort ratings with mean, sd, range and missing values in both conditions
+            saves effort_descriptive_table.docx to figures/effort
+        run effort_observed_figure.r -> creates figures for effort values
+            saves csv, png and pdf file
+        run effort_mixed_model_fit.r from scripts/analysis/effort/mixed_model
+            creates plots for decisionmaking on acutel model design 
+        run mixed_model_figure.r
+        run mixed_model_results.r -> as file that provides final results tables
+    all r files for this are part of a step by step protocol, consistently creating audit and check-up files allowing to make the best possible decisions for nexts steps of analysis given the data 
+        -> should data change slightly in future experiments through changes or mistakes, this will ensure that the created code still leads to best possible analysis
+
+
+
+
+
+-- there is a mistake in the provided balance file from 2024, where rows shifted
+    spotted because I recognised my own id with faulty height and weight from when I participated 2 years ago
+    NO chance to fix because no suffucient info files were give or found
+        this creates small discrepenciy in demographic data between the limesurvey_master file and the full master file
 
 

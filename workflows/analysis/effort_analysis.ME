@@ -1,0 +1,317 @@
+Effort analysis workflow
+
+Purpose
+
+Test whether effort ratings differ between the high-boredom (HB) and
+low-boredom (LB) conditions while retaining the repeated ratings from all four
+trials. Baseline effort is retained as a reference and as a possible
+condition-specific adjustment variable.
+
+Directories
+
+- Prepared analysis data: `analysis/files/effort/`
+- Tables and figures: `figures/effort/`
+
+Step 1: Prepare and validate effort data
+
+Script:
+`scripts/analysis/file_prep/effort_file_prep.R`
+
+Input:
+`data/processed/master/condition_masterfile.csv`
+
+Required source variables:
+
+- `ID`
+- `Condition`
+- `trial_order`
+- `effort_baseline`
+- `effort_01` to `effort_04`
+
+Operations:
+
+1. Retain only the variables needed for the effort analysis.
+2. Confirm that required columns are present.
+3. Confirm that each ID has exactly one HB row and one LB row.
+4. Confirm that Condition contains only HB and LB.
+5. Confirm that every non-missing effort rating is within the valid 0-10
+   response range.
+6. Create an audit reporting baseline missingness and the number of available
+   trial ratings for each ID and condition.
+7. Create a long dataset containing Baseline and Trials 1-4 for descriptive
+   statistics and trajectory figures.
+8. Create a second long dataset containing Trials 1-4 for the primary mixed
+   model. The condition-specific baseline is carried as `baseline_effort` so it
+   can be used as an adjustment variable.
+
+Outputs:
+
+- `analysis/files/effort/effort_all_timepoints_long.csv`
+- `analysis/files/effort/effort_trials_long.csv`
+- `analysis/files/effort/effort_preparation_audit.csv`
+
+Reasoning
+
+Baseline was measured immediately before each condition began. It is therefore
+valuable for descriptive tables, figures, and baseline-adjusted analyses, but
+it is not treated as an ordinary experimental trial in the primary model.
+Trials 1-4 are comparable repeated outcomes in both conditions.
+
+Missing-data decisions after Step 1
+
+- `BG22OE24`, HB: one trial effort rating is missing. Retain all available HB
+  and LB ratings; do not impute the missing value.
+- `KA14RE15`, LB: baseline and all four trial effort ratings are missing.
+  Retain the participant's available HB observations. The participant provides
+  no LB outcome information, and no LB values are imputed.
+- Report the available n and missing count for every condition/timepoint.
+- The mixed model will use available observations. This avoids deleting a
+  participant solely because one rating or one condition is unavailable.
+
+Step 2: Descriptive effort table
+
+Script:
+`scripts/analysis/effort/effort_descriptives.R`
+
+Input:
+`analysis/files/effort/effort_all_timepoints_long.csv`
+
+Operations:
+
+1. Calculate the mean, standard deviation, observed range, valid n, and missing
+   count separately for HB and LB at Baseline and Trials 1-4.
+2. Keep baseline in the table as a reference point.
+3. Do not replace or impute missing effort ratings.
+4. Create a plain CSV table for checking and reuse.
+5. Create a Word table with an APA-style table number, italicized title,
+   booktabs-style borders, consistent decimals, an explanatory note, and Aptos
+   11-point font.
+
+Outputs:
+
+- `figures/effort/effort_descriptive_table.csv`
+- `figures/effort/effort_descriptive_table_APA.docx`
+
+Step 3: Observed effort trajectory
+
+Script:
+`scripts/analysis/effort/effort_observed_figure.R`
+
+Input:
+`analysis/files/effort/effort_all_timepoints_long.csv`
+
+Operations:
+
+1. Calculate observed effort means and 95% confidence intervals separately for
+   HB and LB at Baseline and Trials 1-4.
+2. Preserve the observed valid sample size at every plotted point.
+3. Plot HB and LB using both color and redundant shape/linetype encoding so
+   the conditions remain distinguishable without relying on color alone.
+4. Fix the y-axis to the valid effort scale of 0-10.
+5. Use Aptos 11-point font and export a 300-dpi PNG and vector PDF.
+
+Outputs:
+
+- `figures/effort/effort_trajectory_summary.csv`
+- `figures/effort/effort_observed_trajectory.png`
+- `figures/effort/effort_observed_trajectory.pdf`
+
+Interpretation limitation
+
+This is a descriptive figure based on observed means. Its confidence intervals
+describe uncertainty around each separate mean and are not the inferential
+test of the paired HB-LB difference. The final inferential figure will use
+mixed-model estimated marginal means and their confidence intervals.
+
+Step 4: Fit candidate mixed models and review diagnostics
+
+Script:
+`scripts/analysis/effort/effort_mixed_model_fit.R`
+
+Input:
+`analysis/files/effort/effort_trials_long.csv`
+
+Models:
+
+1. Baseline-adjusted random-intercept model:
+   `Effort ~ Condition + Trial + trial_order + baseline_effort_c + (1 | ID)`
+2. Unadjusted random-intercept sensitivity model:
+   `Effort ~ Condition + Trial + trial_order + (1 | ID)`
+3. Baseline-adjusted random-slope candidate:
+   `Effort ~ Condition + Trial + trial_order + baseline_effort_c +`
+   `(1 + Condition | ID)`
+
+Reasoning:
+
+- Condition is the main predictor for the HB-LB hypothesis.
+- Trial is initially categorical so that a linear change over trials is not
+  imposed.
+- Trial order controls for whether HB or LB was completed first.
+- Condition-specific baseline effort is centered and included in the adjusted
+  models.
+- The random intercept accounts for repeated ratings within participants.
+- The random-slope candidate tests whether the condition effect varies between
+  participants. It will not be retained if it is singular or fails to converge.
+- The unadjusted model is a sensitivity analysis and is not selected using AIC
+  against an adjusted model with a different analysis sample.
+
+Checks and outputs:
+
+- `figures/effort/mixed_model/model_analysis_missingness.csv`
+- `figures/effort/mixed_model/model_diagnostic_summary.csv`
+- One residual-versus-fitted and residual Q-Q diagnostic PNG per model
+- Model objects under `analysis/files/effort/mixed_model/`
+- R/package version information in `model_session_info.txt`
+
+Decision required before Step 5:
+
+Review each model's convergence message, singular-fit result, retained
+observations, and residual plots. Do not select the random-slope model solely
+because it is more complex. If it is singular or unstable, use the adjusted
+random-intercept model as the primary model and retain the unadjusted model as
+a sensitivity check.
+
+Planned later steps
+
+No primary effort-analysis steps remain after Step 6. Any further analyses
+should be identified as additional or exploratory.
+
+Step 5: Inferential results and APA tables
+
+Script:
+`scripts/analysis/effort/effort_mixed_model_results.R`
+
+Primary model decision:
+
+- Retain the baseline-adjusted random-slope model as the primary model.
+- It converged, was not singular, allowed the condition effect to vary between
+  participants, and had the lowest AIC/BIC of the candidate models.
+- Residual plots showed no clear curvature or funnel pattern. Q-Q deviations
+  were mainly in the tails and were judged moderate for a bounded 0-10 rating
+  scale.
+- Retain the unadjusted random-intercept model as a sensitivity analysis.
+
+Operations:
+
+1. Extract the primary model's fixed effects with coefficients, standard
+   errors, confidence intervals, degrees of freedom, t tests, and p values.
+2. Estimate adjusted mean effort in HB and LB.
+3. Test the primary LB-minus-HB contrast. A negative estimate supports the
+   directional hypothesis of lower effort ratings in LB.
+4. Repeat the overall contrast using the unadjusted sensitivity model.
+5. Compare a main-effects model with a Condition-by-Trial interaction model
+   using maximum likelihood and a likelihood-ratio test.
+6. Estimate LB-minus-HB differences separately at Trials 1-4 from the
+   interaction model.
+7. Apply Holm correction across the four trial-specific p values. These are
+   secondary comparisons unless a trial-specific hypothesis was preregistered.
+8. Export numerical CSVs and an Aptos 11 APA-style Word document.
+9. Calculate estimated means using Satterthwaite degrees of freedom and the
+   exact model frames containing the 323 analysed observations. This avoids
+   dependence on the optional `pbkrtest` package and prevents prior-weight
+   warnings caused by reconstructing the original 328-row dataset.
+10. Refit clean copies of the selected primary and sensitivity models on their
+    stored 323-row model frames before estimation. This removes `na.exclude`
+    bookkeeping retained from the original 328-row input without changing the
+    formulas or analysed observations.
+11. Use `summary(infer = c(TRUE, TRUE))` on estimated contrasts to obtain
+    confidence intervals, t statistics, and p values together without passing
+    a duplicate `infer` argument through `confint.emmGrid()`.
+12. Accept either `Df` or `Chi Df` as the likelihood-ratio table's degrees-of-
+    freedom column to accommodate differences between installed package
+    versions.
+
+Outputs under `figures/effort/mixed_model/`:
+
+- `primary_model_fixed_effects.csv`
+- `adjusted_condition_means.csv`
+- `overall_condition_contrasts.csv`
+- `condition_by_trial_interaction_test.csv`
+- `trial_specific_condition_contrasts.csv`
+- `effort_mixed_model_results_APA.docx`
+
+Additional model output:
+
+- `analysis/files/effort/mixed_model/model_adjusted_slope_interaction.rds`
+
+Interpretation sequence:
+
+1. Interpret the overall LB-minus-HB contrast as the primary hypothesis test.
+2. Check whether the Condition-by-Trial interaction is supported.
+3. Interpret trial-specific contrasts as secondary, particularly if the
+   omnibus interaction is not significant.
+4. Confirm whether the unadjusted sensitivity result leads to the same
+   substantive conclusion as the adjusted primary model.
+
+Confirmed Step 5 results
+
+- Primary adjusted model means: HB M = 2.82 and LB M = 2.72.
+- Primary LB-minus-HB contrast: B = -0.11, SE = 0.15,
+  95% CI [-0.42, 0.21], t(34.57) = -0.69, p = .492.
+- The primary result does not support the hypothesis that effort is lower in
+  LB than HB.
+- Effort increased relative to Trial 1 at Trial 2 (B = 0.68, p < .001),
+  Trial 3 (B = 0.91, p < .001), and Trial 4 (B = 1.36, p < .001).
+- Trial order was not significant, B = 0.38, p = .221.
+- Baseline effort was positively associated with trial effort,
+  B = 0.65, p < .001.
+- The Condition-by-Trial interaction was not significant,
+  chi-square(3) = 1.38, p = .710. Therefore, the overall condition contrast is
+  emphasized and trial-specific contrasts are secondary.
+- No trial-specific LB-minus-HB contrast was significant after Holm correction
+  (all adjusted p values = 1.000).
+- The unadjusted random-intercept sensitivity model indicated a small
+  LB-minus-HB difference, B = -0.22, 95% CI [-0.41, -0.02], p = .027. Because
+  this differs from the selected baseline-adjusted random-slope result, the
+  conclusion is described as model-dependent and interpreted cautiously.
+
+Step 6: Final model-estimated figure
+
+Script:
+`scripts/analysis/effort/effort_mixed_model_figure.R`
+
+Operations:
+
+1. Load the selected baseline-adjusted random-slope model.
+2. Refit the identical model on its 323 analysed observations to remove
+   missing-row bookkeeping.
+3. Estimate adjusted HB and LB means at Trials 1-4 using Satterthwaite degrees
+   of freedom.
+4. Plot estimated marginal means and 95% confidence intervals using the valid
+   0-10 effort scale.
+5. Use Aptos 11 and distinguish conditions using color, shape, and line type.
+6. Export a 300-dpi PNG, vector PDF, estimates CSV, and APA-captioned Word file.
+
+Outputs under `figures/effort/mixed_model/`:
+
+- `model_estimated_trial_means.csv`
+- `effort_model_estimated_trajectory.png`
+- `effort_model_estimated_trajectory.pdf`
+- `effort_model_estimated_trajectory_APA.docx`
+
+APA-style reporting draft
+
+A linear mixed-effects model was fitted to examine whether effort ratings
+differed between the high-boredom and low-boredom conditions across four
+repeated trials. The model included condition, trial, trial order, and centered
+condition-specific baseline effort as fixed effects, with participant-specific
+random intercepts and condition slopes. This structure accounted for repeated
+observations within participants and allowed the condition effect to vary
+between participants. The model was estimated from 323 observations across 41
+participants and showed no convergence or singularity problems. Visual
+inspection indicated no clear residual curvature or funnel pattern; Q-Q plot
+departures were primarily limited to the tails.
+
+Contrary to the hypothesis, model-adjusted effort did not differ significantly
+between the low-boredom condition (estimated M = 2.72) and the high-boredom
+condition (estimated M = 2.82), B = -0.11, SE = 0.15,
+95% CI [-0.42, 0.21], t(34.57) = -0.69, p = .492. Effort increased across the
+trials, but the condition difference did not vary significantly by trial,
+chi-square(3) = 1.38, p = .710. None of the trial-specific comparisons was
+significant after Holm correction.
+
+An unadjusted random-intercept sensitivity model produced a small significant
+LB-minus-HB difference, B = -0.22, 95% CI [-0.41, -0.02], p = .027. Because
+this conclusion differed from the primary baseline-adjusted random-slope
+model, the evidence for lower effort in LB should be described as sensitive to
+model specification rather than robust.
