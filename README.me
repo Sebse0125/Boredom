@@ -20,6 +20,7 @@ general workflow
         balance file serves as basis
     run balance.r script
     run psychopy scripts
+        this has to be run before LimeSurvey because of dependencies!
         psy_file_assumption_checks.r ->for basic file checks and cahnges allowing further work
         psy_pre_management.R -> for file structure and extracting important information, naming standardisation, while creating file copies to keep raw data untouched
         s_file_merging.r -> merging all standardized files into master
@@ -29,7 +30,7 @@ general workflow
         limesurvey.r -> should ONLY be run if SBPS, MSBS and attention check data is not required
             THIS HAS NOT BEEN RUN IN OUR FINAL DATA SETUP
     run master Script
-        master_file_preperation.r -> for creating a single file with all information and data required
+        master_file_preperation_with_boredom.r -> for creating a master files -> individual files, audit files, plus full master files with 1 and 2 rows per participant
             creates a file with 1 line per participant
             creates a file with 2 lines per participant, one for each condition
                 in our analysis, condition was deemed more important for sorting results than condition order or measurement block

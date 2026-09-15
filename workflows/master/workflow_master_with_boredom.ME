@@ -1,4 +1,4 @@
-Final source preparation and combined master workflow
+Expanded final source preparation and combined master workflow
 
 Purpose
 
@@ -8,13 +8,13 @@ files for separate analyses.
 
 Script
 
-`workflows/master_file_preparation.R`
+`workflows/master_file_preparation_with_boredom.R`
 
 Inputs
 
 - `data/processed/balance/merged/data_merged.csv`
 - `data/processed/psychopy/master/psychopy_master.csv`
-- `data/processed/limesurvey/master/limesurvey_master.csv`
+- `data/processed/limesurvey/master/limesurvey_master_with_boredom.csv`
 
 Outputs
 
@@ -23,12 +23,19 @@ All outputs are written to `data/processed/master`:
 - `balance_master.csv`: full balance data with standardized ASCII IDs,
   demographic unit suffixes, and documented height corrections.
 - `psychopy_final.csv`: full PsychoPy master with standardized ASCII IDs.
-- `limesurvey_final.csv`: LimeSurvey master without administrative/audit fields.
-- `master.csv`: balance-authoritative participant merge of all three sources.
-- `master_id_mapping_audit.csv`: original/normalized IDs, match status, and any
-  proposed fuzzy match.
-- `master_merge_audit.csv`: presence of each balance ID in all three sources.
+- `limesurvey_final_with_boredom.csv`: expanded LimeSurvey master without
+  administrative/audit fields.
+- `master_with_boredom.csv`: balance-authoritative participant merge of all
+  three sources, with one row per participant.
+- `condition_masterfile.csv`: analysis-ready long-form master with one HB and
+  one LB row per participant.
+- `master_id_mapping_audit_with_boredom.csv`: original/normalized IDs, match
+  status, and any proposed fuzzy match.
+- `master_merge_audit_with_boredom.csv`: presence of each balance ID in all
+  three sources.
 - `master_correction_audit.csv`: original and corrected balance values.
+
+The earlier verified master script and its outputs are not overwritten.
 
 Authority rules
 
@@ -63,9 +70,11 @@ exist in PsychoPy and LimeSurvey but have no retained balance row:
 - `CH18EU28`
 - `DO13UE03`
 
-They are retained in `psychopy_final.csv` and `limesurvey_final.csv`, assigned
+They are retained in `psychopy_final.csv` and
+`limesurvey_final_with_boredom.csv`, assigned
 `CONFIRMED_SOURCE_ONLY_EXCLUDED_FROM_MASTER` in the audits, and excluded from
-the balance-authoritative `master.csv`. No fuzzy match is attempted for them.
+the balance-authoritative `master_with_boredom.csv`. No fuzzy match is attempted
+for them.
 `CH10AL22` is a distinct participant and matches exactly across all sources; it
 must never be used as a substitute for `CH10AN25`.
 
@@ -83,7 +92,7 @@ Balance corrections
 
 LimeSurvey final removals
 
-The following fields are excluded from `limesurvey_final.csv`:
+The following fields are excluded from `limesurvey_final_with_boredom.csv`:
 
 - `response_id`
 - `gender_original`
@@ -104,10 +113,46 @@ Merge procedure
 5. Remove non-authoritative demographic/order/block duplicates from the join
    copies only; standalone files remain intact.
 6. Left-join PsychoPy and LimeSurvey onto balance by normalized ID so the
-   balance participant set controls the rows in `master.csv`.
+   balance participant set controls the rows in `master_with_boredom.csv`.
 7. Confirm that the merge did not change the number or uniqueness of balance
    IDs.
 8. Write a merge audit showing complete and incomplete three-source matches.
+
+Condition-level reshape
+
+1. Preserve `master_with_boredom.csv` as the one-row-per-participant wide
+   master.
+2. Identify measurement variables containing an HB or LB token in their name.
+3. Require identical sets of HB and LB variables after removing the condition
+   token. Stop if either condition is missing a corresponding variable or if
+   removing the token would create duplicate names.
+4. Create two rows per balance participant and add `Condition`, containing HB
+   or LB.
+5. Repeat participant-level fields such as ID, `height_cm`, `weight_kg`,
+   `trial_order`, and `survey_year` on both condition rows.
+6. Remove HB/LB only from measurement column names. Examples:
+   - `rms_ap HB_t1` / `rms_ap LB_t1` -> `rms_ap_t1`
+   - `arm_HB_01` / `arm_LB_01` -> `arm_01`
+   - `effort_HB_baseline` / `effort_LB_baseline` -> `effort_baseline`
+7. Handle the added LimeSurvey variables as follows:
+   - SBPS trait items (`sbps_01` to `sbps_08`) and scores are participant-level
+     and repeat on both condition rows.
+   - MSBS items and scores are selected for the matching condition while
+     retaining `baseline` or `post` in the column name.
+   - Attention-counter values are selected for the matching condition and
+     become `attention_counter_01` to `attention_counter_04`.
+8. Validate exactly two unique condition rows per participant before writing
+   `condition_masterfile.csv`.
+
+Expanded LimeSurvey validation
+
+Before any final output is written, the script requires and checks:
+
+- all eight SBPS items and their valid-count, sum, and mean scores;
+- all eight MSBS items at baseline and post for HB and LB;
+- the MSBS valid-count, sum, and mean scores at every condition/time point;
+- four attention-counter values for HB and four for LB;
+- survival of all these variables through the wide merge and condition reshape.
 
 Manual ID-resolution log
 
@@ -122,14 +167,22 @@ Copy one block for each fuzzy or unmatched ID:
 
 Final review
 
-- [ ] `master_id_mapping_audit.csv` contains no unresolved match.
+- [ ] `master_id_mapping_audit_with_boredom.csv` contains no unresolved match.
 - [ ] The three confirmed source-only IDs are documented and absent from
-      `master.csv` but present in their standalone source files.
+      `master_with_boredom.csv` but present in their standalone source files.
 - [ ] All four height corrections appear in `master_correction_audit.csv`.
 - [ ] Balance uses `height_cm` and `weight_kg`.
 - [ ] All standalone final files contain unique participant IDs.
-- [ ] `master_merge_audit.csv` contains the expected participant coverage.
-- [ ] The row count of `master.csv` equals the row count of balance master.
-- [ ] `master.csv` contains one unique row per authoritative balance ID.
+- [ ] `master_merge_audit_with_boredom.csv` contains the expected participant
+      coverage.
+- [ ] The row count of `master_with_boredom.csv` equals the row count of
+      balance master.
+- [ ] `master_with_boredom.csv` contains one unique row per authoritative
+      balance ID.
 - [ ] Trial order and Block variables come from PsychoPy.
 - [ ] No source column was silently overwritten during merging.
+- [ ] `condition_masterfile.csv` contains exactly 82 rows for 41 participants.
+- [ ] Every ID occurs exactly twice: once with HB and once with LB.
+- [ ] Condition-specific values match their original wide-master columns.
+- [ ] SBPS, MSBS, and attention-counter fields passed the expanded schema
+      checks.
