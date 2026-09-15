@@ -1,0 +1,306 @@
+Full workflow with attention check and SBPS and MSBS data
+LimeSurvey cleaning, condition mapping, and merging workflow
+
+Purpose
+
+Create an auditable LimeSurvey dataset from the deidentified 2024 and 2026
+exports, harmonize condition-specific ratings, and prepare it for merging with
+the PsychoPy participant master. Source exports remain unchanged.
+
+Script
+
+`scripts/limesurvey/limesurvey_processing_with_boredom.R`
+
+This script was created from the user's verified working
+`limesurvey_processing(2).R`. The earlier script remains unchanged as a
+fallback; additions are restricted to SBPS/MSBS extraction, validation,
+scoring, and related output names.
+
+Inputs
+
+- `data/inter/limesurvey/limesurvey_2024_deidentified.csv`
+- `data/inter/limesurvey/limesurvey_2026_deidentified.csv`
+- `data/processed/psychopy/master/psychopy_master.csv`
+
+Outputs
+
+Checkpoint 1 writes to `data/inter/limesurvey`:
+
+- `limesurvey_participant_checkpoint.csv`: included participants with cleaned
+  demographics, IDs, and trial order. Trial ratings are not included yet.
+- `limesurvey_participant_audit.csv`: every source row, inclusion status, ID
+  correction, PsychoPy match, and order comparison.
+
+Later checkpoints will add:
+
+- `limesurvey_cleaned_with_boredom.csv`: participant metadata, cleaned HB/LB
+  effort/boredom/pain ratings, and SBPS/MSBS items and scores.
+- `limesurvey_rating_audit.csv`: one row per source rating, retaining its raw
+  value, cleaned value, A/B position, mapped HB/LB condition, status, and note.
+- `limesurvey_rating_missingness.csv`: available and missing rating counts for
+  every included participant and condition.
+- `limesurvey_boredom_item_audit.csv`: one row per SBPS/MSBS item, retaining
+  source and cleaned values, position/condition/time point, and validity.
+- `limesurvey_boredom_missingness.csv`: item completeness and score
+  availability for every SBPS/MSBS assessment.
+- `limesurvey_attention_counter_audit.csv`: one row per recorded counter value,
+  retaining raw/cleaned values, A/B position, mapped condition, validity, and
+  cumulative-sequence warnings.
+- `limesurvey_attention_counter_missingness.csv`: completeness and sequence
+  status for each participant and condition.
+- `limesurvey_final_validation_with_boredom.csv`: participant-level structure,
+  order, rating, boredom-item, missingness, and demographic checks.
+- `data/processed/limesurvey/master/limesurvey_master_with_boredom.csv`:
+  approved expanded LimeSurvey master, written only when validation passes.
+
+Checkpoint 1: participant metadata and inclusion
+
+1. Read both deidentified CSV exports as character data.
+2. Require the verified year-specific columns for ID, demographics, and order.
+   Stop rather than guess if a required column is absent.
+3. Convert blank strings and literal `NA` text to missing values.
+4. Standardize ID capitalization and remove separators.
+5. Apply confirmed ID corrections:
+   - `DO11ÜB30` -> `DO11UB30`
+   - `DI16ÜB31` -> `DI16UB31`
+   - incomplete ID `AN` -> `AN07IE11`
+6. Retain both the original and standardized gender values. Standardized values
+   are `male`, `female`, and `diverse`.
+7. Validate the ID pattern: two letters, two digits, two letters, two digits.
+8. Match IDs against the approved PsychoPy master. Obvious tests, pilots,
+   invalid IDs, and rows without matching PsychoPy data are excluded from the
+   checkpoint but retained in the audit with a reason.
+9. Compare LimeSurvey order with PsychoPy `trial_order`. PsychoPy is
+   authoritative when the two disagree.
+10. Stop before writing the checkpoint if an included ID occurs more than once.
+
+Confirmed participant decisions
+
+- `JU20ÜC09`: LimeSurvey says `HB_LB`, while PsychoPy says `LB_HB`. Retain
+  PsychoPy order `LB_HB` and flag the disagreement.
+- `BG22OE24`: measurement stopped because the participant became unwell.
+  Retain available data and preserve missing final ratings as NA.
+- `KA14RE15`: values of 99 mean missing because the survey site crashed.
+  Convert them to NA during rating cleaning and document the conversion.
+- `DO13UE03`: parts of the wider measurement failed. Retain available
+  LimeSurvey and PsychoPy information; preserve missing ratings as NA. Later
+  eligibility decisions occur only after all datasets are merged.
+
+Checkpoint 2: ratings
+
+`IMPLEMENTED`
+
+1. Extract effort, boredom, and pain for baseline and trials 01-04 in Blocks A
+   and B from both language-specific schemas.
+2. Convert ratings to numeric. Accept only 0-10; turn 99 and any other invalid
+   value into NA while retaining the original value in the audit.
+3. Interpret A and B as measurement positions:
+   - `LB_HB`: A = LB and B = HB.
+   - `HB_LB`: A = HB and B = LB.
+4. Reshape to intelligible condition columns such as
+   `effort_LB_baseline`, `effort_LB_01`, ..., `pain_HB_04`.
+5. Record participant-, condition-, trial-, and measure-specific missingness.
+6. Write one clean participant row containing 30 rating columns:
+   two conditions x three measures x baseline/trials 01-04.
+
+Rating validity and missingness
+
+- The valid rating range is 0-10 inclusive.
+- Blank values and literal `NA` are retained as NA.
+- Non-numeric values and numeric values outside 0-10 are converted to NA and
+  marked in `limesurvey_rating_audit.csv`.
+- A missing value is never converted to zero.
+- `KA14RE15`: all recorded values of 99 are converted to NA and annotated as
+  missing after a LimeSurvey site crash.
+- `BG22OE24`: the three missing final B-position ratings are retained as NA and
+  annotated as resulting from the participant becoming unwell.
+- `DO13UE03`: unavailable B-position ratings are retained as NA and annotated.
+
+Checkpoint 2b: SBPS/MSBS item extraction
+
+`IMPLEMENTED`
+
+1. Extract the eight SBPS trait-boredom items assessed once per participant.
+2. Extract the eight selected MSBS state-boredom items at A baseline, A post,
+   B baseline, and B post.
+3. Use the 2024 item identifiers directly:
+   - SBPS: `01-08`.
+   - MSBS: `01`, `03`, `09`, `10`, `22`, `23`, `24`, `28`.
+4. For 2026, use the verified corresponding German question blocks. Confirm
+   that the four repeated MSBS blocks contain the same questions in the same
+   order after removing LimeSurvey's `...NN` header suffixes. Stop if the
+   structure differs.
+5. Parse the leading numeric value from responses such as
+   `1 - stimme überhaupt nicht zu`; explanatory text is not retained in the
+   cleaned master but remains in the item audit.
+6. Accept only integer-equivalent values from 1 through 7. Missing values stay
+   NA; non-numeric or out-of-range values become NA and block approval.
+7. Map MSBS A/B to HB/LB using the same PsychoPy-authoritative `trial_order`
+   used for the effort/boredom/pain ratings.
+8. Name item variables as:
+   - `sbps_01` through `sbps_08`.
+   - `msbs_[HB/LB]_[baseline/post]_[item]`.
+
+SBPS/MSBS scores
+
+- Items are retained unchanged on their observed 1-7 direction; no reverse
+  scoring is applied.
+- Scores are complete-case summaries. No missing item is imputed.
+- `*_n_valid` records the number of usable items, from 0 to 8.
+- `*_score_sum` is calculated only when all eight items are valid; its possible
+  range is 8-56.
+- `*_score_mean` is calculated only when all eight items are valid; its possible
+  range is 1-7.
+- One SBPS score is created per participant.
+- Four MSBS scores are created: HB baseline, HB post, LB baseline, and LB post.
+- SBPS uses consistently keyed items, so reverse scoring is not required.
+- The score variables are transparent derived summaries; the item-level data
+  remain the authoritative extracted responses.
+- Complete-case sum/mean scoring is a project processing rule chosen to avoid
+  undocumented imputation. It should not be interpreted as a published
+  missing-item rule or diagnostic threshold.
+
+Documented boredom-scale missingness
+
+- `DO13UE03`: all eight B-post MSBS responses are absent following the
+  documented measurement failure. Because this participant's order is
+  `LB_HB`, these are `msbs_HB_post_*`. Retain item and score values as NA and
+  record `DOCUMENTED_MISSING`.
+- No other included participant had missing or invalid SBPS/MSBS values during
+  source inspection. Any additional case produces `REVIEW_REQUIRED`.
+
+Checkpoint 2c: attention counter
+
+`IMPLEMENTED`
+
+1. Extract the cumulative clicker-counter readings recorded after trials 01-04
+   in measurement positions A and B.
+2. Use the exact 2024 columns `countA1`, `countA2`, `countA3`, `countApos`,
+   `countB1`, `countB2`, `countB3`, and `countBpos`.
+3. Use the exact 2026 columns `counts...40`, `counts...44`, `counts...48`,
+   `counts...52`, `counts...77`, `counts...81`, `counts...85`, and
+   `counts...89`.
+4. Map A/B to HB/LB using the PsychoPy-authoritative `trial_order`.
+5. Store the values as `attention_counter_[HB/LB]_[01-04]`.
+6. Preserve cumulative readings as recorded. Do not calculate per-trial
+   differences in this extraction step.
+7. Accept zero or positive whole numbers. Missing, non-numeric, negative, or
+   non-integer values become NA; unexpected invalid/missing data require review.
+8. Treat `KA14RE15` values of 99 as documented missing data caused by the
+   survey-site crash. Do not treat 99 globally as missing for other IDs.
+9. Retain the four absent `DO13UE03` HB counter readings as documented NA.
+10. Check whether available counter readings decrease within a condition.
+    Decreases are warnings only because the source cannot distinguish counter
+    reset, entry error, or an interrupted measurement.
+
+Known counter sequence warnings
+
+- `BG22OE24`, Block B: `5, 9, 12, 0`. The participant became unwell and the
+  measurement was stopped. Retain the recorded zero pending manual review.
+- `AN06AN18`, Block A: `7, 14, 24, 8`. Retain the recorded values pending
+  manual review.
+
+Checkpoint 3: final LimeSurvey validation
+
+`IMPLEMENTED`
+
+1. Confirm one LimeSurvey row per included ID.
+2. Confirm every retained rating is numeric and within 0-10.
+3. Confirm each approved PsychoPy ID has one matching LimeSurvey row and the
+   same authoritative trial order.
+4. Confirm exactly 30 effort/boredom/pain rating cells and 40 SBPS/MSBS item
+   cells per participant.
+5. Accept only the documented missing-rating patterns for `BG22OE24`,
+   `KA14RE15`, and `DO13UE03`. Any additional missing rating produces
+   `REVIEW_REQUIRED`.
+6. Flag missing or broadly implausible demographics for review without
+   changing their values. Review ranges are age 0-120 years, weight 20-300 kg,
+   and height 100-250 cm.
+7. Always write the final validation report. Write the processed LimeSurvey
+   master only when no row is marked `REVIEW_REQUIRED`.
+8. Require all cleaned SBPS/MSBS responses to be in 1-7 and permit only the
+   documented `DO13UE03` MSBS missingness pattern.
+9. Confirm exactly eight attention-counter cells per participant and permit
+   only the documented `KA14RE15` and `DO13UE03` missing values. Sequence
+   decreases generate `VALID_WITH_WARNING` rather than automatic correction.
+
+Future cross-measurement merge
+
+`DEFERRED TO A SEPARATE SCRIPT/WORKFLOW`
+
+The LimeSurvey/PsychoPy merge is intentionally not performed here. It may later
+be combined with additional measurement types. Merge by standardized ID,
+retain partial component data as NA, and produce a separate merge audit.
+
+Manual warning-resolution log
+
+Copy one block for each new warning requiring judgment:
+
+- ID/file: ___________________________________________
+  Warning: ___________________________________________
+  Evidence reviewed: _________________________________
+  Decision: __________________________________________
+  Data change made: __________________________________
+  Reviewer/date: _____________________________________
+
+Checkpoint 1 review
+
+- [ ] Required columns were found in both source files.
+- [ ] All expected study IDs are included exactly once.
+- [ ] Every excluded row and its reason were reviewed in the audit.
+- [ ] Confirmed ID corrections are present.
+- [ ] `JU20ÜC09` has final `trial_order = LB_HB` and is flagged.
+- [ ] No unexpected survey/PsychoPy order conflict remains.
+- [ ] Demographic values and missingness are plausible.
+
+Checkpoint 2 review
+
+- [ ] `limesurvey_cleaned.csv` contains one row per expected participant.
+- [ ] It contains 30 condition-labelled rating columns per participant.
+- [ ] All non-missing cleaned ratings are between 0 and 10.
+- [ ] `KA14RE15` values of 99 became NA and are documented in the audit.
+- [ ] `BG22OE24` missing final ratings remain NA and are documented.
+- [ ] `DO13UE03` unavailable ratings remain NA and are documented.
+- [ ] Every row marked `REVIEW_MISSING` in the missingness file is explained.
+
+Checkpoint 2b review
+
+- [ ] Each included participant has eight SBPS and 32 MSBS item cells.
+- [ ] All non-missing cleaned SBPS/MSBS responses are from 1 through 7.
+- [ ] Endpoint label text was reduced correctly to numeric 1 or 7.
+- [ ] A/B MSBS assessments map to the correct HB/LB conditions.
+- [ ] SBPS and complete MSBS assessments report `n_valid = 8`.
+- [ ] Sum scores are 8-56 and mean scores are 1-7 when available.
+- [ ] `DO13UE03` HB-post MSBS items and scores are NA and documented.
+- [ ] No unexpected `REVIEW_REQUIRED` scale record remains.
+
+Checkpoint 2c review
+
+- [ ] Each included participant has eight attention-counter cells.
+- [ ] Counter columns map correctly from A/B to HB/LB.
+- [ ] `KA14RE15` counter values of 99 became documented NA values.
+- [ ] `DO13UE03` has four documented missing HB counter readings.
+- [ ] The `BG22OE24` and `AN06AN18` sequence warnings were reviewed.
+- [ ] No counter difference was calculated automatically.
+- [ ] No unexpected missing, negative, non-integer, or non-numeric counter
+      value remains.
+
+Checkpoint 3 review
+
+- [ ] `limesurvey_final_validation_with_boredom.csv` contains no
+      `REVIEW_REQUIRED` rows.
+- [ ] Every expected PsychoPy participant has exactly one LimeSurvey row.
+- [ ] All final trial orders match the PsychoPy reference.
+- [ ] The only missing-rating patterns are the three documented exceptions.
+- [ ] Demographic plausibility flags have been reviewed.
+- [ ] The approved expanded master exists at
+      `data/processed/limesurvey/master/limesurvey_master_with_boredom.csv`.
+
+Scale references
+
+- Struk et al. (2017), Short Boredom Proneness Scale:
+  https://doi.org/10.1177/1073191115609996
+- Hunter et al. (2016), eight-item short-form MSBS evaluation:
+  https://doi.org/10.1027/1015-5759/a000251
+- Zerr et al. (2024), German BPS/MSBS validation:
+  https://doi.org/10.1038/s41598-024-53236-4
