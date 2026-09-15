@@ -1,3 +1,5 @@
+# ==== run this or limesurvey file WITHOUT SBPS and MSBS and without attention check data====#
+# 
 # Clean and harmonize LimeSurvey participant metadata (checkpoint 1).
 #this file was created with several checkpoints and audit files to ensure validity
 #"deidentified" with removed researcher names (column) were used to simplyfy file structure and ensure privacy of (former) students
