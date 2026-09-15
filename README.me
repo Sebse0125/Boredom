@@ -1,4 +1,37 @@
-does this work now?
+This is the Repository for all data and analysis for the Boredom Project of Project Seminar 1 from Sebastian Kappes
+    additional information on the project can be requested via Email under sebastian.kappes@uni-konstanz.de
 
-This is new info after setting up online repo
-can I update this soon?
+folder structure was created and connected to git
+raw data was downloaded and sorted
+three different data origins were identified: LimeSurvey, PsychoPy and Balance files from VR
+due to high complexity, all operations leading to the final individual datasets in "master" plus the final complete data set, were conducted in seperated .R scripts, found in the scripts folder
+each script has its own workflow .ME file found in the "workflows" folder
+    these workflow.ME files give step by step documentation of operation by the code.
+    some of these operations are also explained in each script for better reproducibility
+    if necessary, scripts contain checkpoints making sure faults or inconsistencies within the data are spotted.
+        through fixing and rerunning, mistakes were found and corrected. -> scripts can be run as they are on raw data and correct all mistakes will be corrected
+            if mistakes still occur, warning messages pop up
+
+general workflow
+    download raw data
+        balance file serves as basis
+    run balance.r script
+    run psychopy scripts
+        psy_file_assumption_checks.r ->for basic file checks and cahnges allowing further work
+        psy_pre_management.R -> for file structure and extracting important information, naming standardisation, while creating file copies to keep raw data untouched
+        s_file_merging.r -> merging all standardized files into master
+    run LimeSurvey scripts
+        psy_file_assumption_checks.r ->for cleaning obstructing collums
+        limesurvey_processing_with_boredom.r ->for extraction of all necessary LimeSurvey data including demographics, pain, effort, boredom, SBPS, MSBS and attention check
+        limesurvey.r -> should ONLY be run if SBPS, MSBS and attention check data is not required
+            THIS HAS NOT BEEN RUN IN OUR FINAL DATA SETUP
+    run master Script
+        master_file_preperation.r -> for creating a single file with all information and data required
+            creates a file with 1 line per participant
+            creates a file with 2 lines per participant, one for each condition
+                in our analysis, condition was deemed more important for sorting results than condition order or measurement block
+            -
+        -
+    run analysis
+
+
