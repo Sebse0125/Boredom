@@ -1,8 +1,0 @@
-source_file,action,ID_override,Block_override,Condition_override,decision_note
-LE11ON12_B_LB__Balance_and_VR_A_2024-06-24_09h45.48.708.csv,include,NA,B,NA,System error: expName says A; date/time and paired file confirm Block B.
-CH101AN25_A_HB__Balance_and_VR_A_2024-07-01_11h46.18.751.csv,include,CH10AN25,NA,NA,Malformed ID corrected to CH10AN25.
-JU20ÜC09_A_LB_Balance_and_VR_A_2024-07-08_16h25.25.936.csv,include,JU20ÜC09,NA,NA,participant column says JU20ÜB09; confirmed correct ID is JU20ÜC09.
-CA11UE11_B_LB_Balance_and_VR_B_2024-06-26_15h40.43.273.csv,include,CA11UR11,NA,NA,Confirmed correct ID is CA11UR11.
-AN06AN18_A_LB_Balance_and_VR_A_2026-06-17_10h28.55.133.csv,exclude,NA,NA,NA,Incomplete recording; complete 11h01 recording retained.
-CA04TU11_Balance_and_VR_B_2026-05-26_09h03.49.193.csv,exclude,NA,NA,NA,Incomplete recording; complete 09h13 recording retained.
-CH10AN25_B_LB__Balance_and_VR_B_2024-07-01_12h51.08.713.csv,include,NA,B,NA,"participant field says Block A; filename, expName, and paired A/HB file confirm Block B."
