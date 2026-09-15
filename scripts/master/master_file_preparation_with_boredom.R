@@ -1,17 +1,18 @@
-# Prepare standalone final datasets and an authority-aware combined master.
+# Prepare standalone final datasets and expanded boredom/attention masters.
 #
 # Inputs:
 #   data/processed/balance/merged/data_merged.csv
 #   data/processed/psychopy/master/psychopy_master.csv
-#   data/processed/limesurvey/master/limesurvey_master.csv
+#   data/processed/limesurvey/master/limesurvey_master_with_boredom.csv
 #
 # Outputs:
 #   data/processed/master/balance_master.csv
 #   data/processed/master/psychopy_final.csv
-#   data/processed/master/limesurvey_final.csv
-#   data/processed/master/master.csv
-#   data/processed/master/master_id_mapping_audit.csv
-#   data/processed/master/master_merge_audit.csv
+#   data/processed/master/limesurvey_final_with_boredom.csv
+#   data/processed/master/master_with_boredom.csv
+#   data/processed/master/condition_masterfile.csv
+#   data/processed/master/master_id_mapping_audit_with_boredom.csv
+#   data/processed/master/master_merge_audit_with_boredom.csv
 #   data/processed/master/master_correction_audit.csv
 
 library(readr)
@@ -22,15 +23,28 @@ library(tibble)
 
 balance_path <- "data/processed/balance/merged/data_merged.csv"
 psychopy_path <- "data/processed/psychopy/master/psychopy_master.csv"
-limesurvey_path <- "data/processed/limesurvey/master/limesurvey_master.csv"
+limesurvey_path <- paste0(
+  "data/processed/limesurvey/master/",
+  "limesurvey_master_with_boredom.csv"
+)
 output_dir <- "data/processed/master"
 
 balance_output_path <- file.path(output_dir, "balance_master.csv")
 psychopy_output_path <- file.path(output_dir, "psychopy_final.csv")
-limesurvey_output_path <- file.path(output_dir, "limesurvey_final.csv")
-master_output_path <- file.path(output_dir, "master.csv")
-id_audit_path <- file.path(output_dir, "master_id_mapping_audit.csv")
-merge_audit_path <- file.path(output_dir, "master_merge_audit.csv")
+limesurvey_output_path <- file.path(
+  output_dir,
+  "limesurvey_final_with_boredom.csv"
+)
+master_output_path <- file.path(output_dir, "master_with_boredom.csv")
+condition_master_output_path <- file.path(output_dir, "condition_masterfile.csv")
+id_audit_path <- file.path(
+  output_dir,
+  "master_id_mapping_audit_with_boredom.csv"
+)
+merge_audit_path <- file.path(
+  output_dir,
+  "master_merge_audit_with_boredom.csv"
+)
 correction_audit_path <- file.path(output_dir, "master_correction_audit.csv")
 
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
@@ -144,6 +158,56 @@ create_id_audit <- function(data, source_name, balance_ids) {
 balance_raw <- read_source(balance_path, "Balance")
 psychopy_raw <- read_source(psychopy_path, "PsychoPy")
 limesurvey_raw <- read_source(limesurvey_path, "LimeSurvey")
+
+# Require the complete expanded LimeSurvey schema before any output is written.
+msbs_item_ids <- c("01", "03", "09", "10", "22", "23", "24", "28")
+required_sbps_columns <- c(
+  sprintf("sbps_%02d", 1:8),
+  "sbps_n_valid", "sbps_score_sum", "sbps_score_mean"
+)
+required_msbs_item_columns <- unlist(
+  map(c("LB", "HB"), function(condition) {
+    unlist(map(c("baseline", "post"), function(timepoint) {
+      paste("msbs", condition, timepoint, msbs_item_ids, sep = "_")
+    }))
+  }),
+  use.names = FALSE
+)
+required_msbs_score_columns <- unlist(
+  map(c("LB", "HB"), function(condition) {
+    unlist(map(c("baseline", "post"), function(timepoint) {
+      paste0(
+        "msbs_", condition, "_", timepoint, "_",
+        c("n_valid", "score_sum", "score_mean")
+      )
+    }))
+  }),
+  use.names = FALSE
+)
+required_attention_columns <- unlist(
+  map(c("LB", "HB"), function(condition) {
+    paste0("attention_counter_", condition, "_", sprintf("%02d", 1:4))
+  }),
+  use.names = FALSE
+)
+required_expanded_limesurvey_columns <- c(
+  required_sbps_columns,
+  required_msbs_item_columns,
+  required_msbs_score_columns,
+  required_attention_columns
+)
+
+missing_expanded_columns <- setdiff(
+  required_expanded_limesurvey_columns,
+  names(limesurvey_raw)
+)
+if (length(missing_expanded_columns)) {
+  stop(
+    "Expanded LimeSurvey master is missing required column(s): ",
+    paste(missing_expanded_columns, collapse = " | "),
+    ". No final master files were written."
+  )
+}
 
 balance <- standardize_id_column(balance_raw, "Balance")
 psychopy <- standardize_id_column(psychopy_raw, "PsychoPy")
@@ -331,6 +395,17 @@ master <- balance_join %>%
   left_join(psychopy_final_for_join, by = "ID") %>%
   left_join(limesurvey_join, by = "ID")
 
+missing_expanded_master_columns <- setdiff(
+  required_expanded_limesurvey_columns,
+  names(master)
+)
+if (length(missing_expanded_master_columns)) {
+  stop(
+    "Expanded LimeSurvey columns were lost or renamed unexpectedly during merge: ",
+    paste(missing_expanded_master_columns, collapse = " | ")
+  )
+}
+
 merge_audit <- tibble(ID = balance_ids) %>%
   mutate(
     balance_present = TRUE,
@@ -371,13 +446,101 @@ if (nrow(master) != nrow(balance_master) || n_distinct(master$ID) != nrow(master
 }
 
 write_csv(merge_audit, merge_audit_path, na = "")
+
+# Create a condition-level master: one HB and one LB row per participant.
+# Participant-level variables are repeated; the HB/LB token is removed from
+# measurement column names and stored in the new Condition column.
+condition_pattern <- "(^|[ _])(HB|LB)(_|$)"
+condition_columns <- names(master)[
+  str_detect(names(master), regex(condition_pattern, ignore_case = FALSE))
+]
+participant_columns <- setdiff(names(master), condition_columns)
+
+remove_condition_token <- function(column_name) {
+  column_name %>%
+    str_replace(" (HB|LB)_", "_") %>%
+    str_replace("_(HB|LB)_", "_") %>%
+    str_replace("_(HB|LB)$", "")
+}
+
+condition_column_sets <- map(c("HB", "LB"), function(condition) {
+  selected <- condition_columns[
+    str_detect(
+      condition_columns,
+      regex(paste0("(^|[ _])", condition, "(_|$)"))
+    )
+  ]
+  set_names(selected, remove_condition_token(selected))
+})
+names(condition_column_sets) <- c("HB", "LB")
+
+if (!setequal(names(condition_column_sets$HB), names(condition_column_sets$LB))) {
+  stop("HB and LB do not contain the same condition-specific variables.")
+}
+
+if (anyDuplicated(names(condition_column_sets$HB)) ||
+    anyDuplicated(names(condition_column_sets$LB))) {
+  stop("Removing HB/LB from column names would create duplicate variables.")
+}
+
+master_by_condition <- map_dfr(c("HB", "LB"), function(condition) {
+  source_columns <- unname(condition_column_sets[[condition]])
+  output_names <- names(condition_column_sets[[condition]])
+
+  condition_data <- master %>% select(all_of(source_columns))
+  names(condition_data) <- output_names
+
+  bind_cols(
+    master %>% select(all_of(participant_columns)),
+    tibble(Condition = condition),
+    condition_data
+  )
+}) %>%
+  relocate(Condition, .after = ID) %>%
+  mutate(Condition = factor(Condition, levels = c("HB", "LB"))) %>%
+  arrange(ID, Condition) %>%
+  mutate(Condition = as.character(Condition))
+
+if (nrow(master_by_condition) != 2L * nrow(master) ||
+    n_distinct(master_by_condition$ID, master_by_condition$Condition) !=
+      nrow(master_by_condition)) {
+  stop("Condition-level reshape did not create exactly one HB and one LB row per ID.")
+}
+
+expected_condition_limesurvey_columns <- c(
+  required_sbps_columns,
+  unique(remove_condition_token(c(
+    required_msbs_item_columns,
+    required_msbs_score_columns,
+    required_attention_columns
+  )))
+)
+missing_condition_limesurvey_columns <- setdiff(
+  expected_condition_limesurvey_columns,
+  names(master_by_condition)
+)
+if (length(missing_condition_limesurvey_columns)) {
+  stop(
+    "Condition master is missing expanded LimeSurvey column(s): ",
+    paste(missing_condition_limesurvey_columns, collapse = " | ")
+  )
+}
+
+condition_counts <- master_by_condition %>%
+  count(ID, Condition, name = "n")
+if (any(condition_counts$n != 1L) ||
+    any(!condition_counts$Condition %in% c("HB", "LB"))) {
+  stop("Condition master does not contain one unique HB and LB row per ID.")
+}
+
 write_csv(master, master_output_path, na = "")
+write_csv(master_by_condition, condition_master_output_path, na = "")
 
 message("Balance final written: ", balance_output_path)
 message("PsychoPy final written: ", psychopy_output_path)
 message("LimeSurvey final written: ", limesurvey_output_path)
 message("Combined master written: ", master_output_path)
+message("Condition-level master written: ", condition_master_output_path)
 message("ID audit written: ", id_audit_path)
 message("Merge audit written: ", merge_audit_path)
 message("Correction audit written: ", correction_audit_path)
-
